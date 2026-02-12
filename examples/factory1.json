@@ -1,0 +1,177 @@
+{
+  "parts_file": null,
+  "jobs_file": null,
+  "machines": {
+    "gantry": {
+      "toolend": {
+        "class": "toolend",
+        "mass": 0.3,
+        "description": "3d printed",
+        "cad": "/home/toolend.stl",
+        "assembly_id": false,
+        "bbox": [
+          205,
+          308,
+          150,
+          52
+        ],
+        "position": {
+          "x": 15.0,
+          "y": 0.0,
+          "z": -60.0,
+          "a": -90.0
+        },
+        "speed": 0.0,
+        "effector": "gripper"
+      },
+      "holders": [
+        {
+          "id": "h1",
+          "name": "holder1",
+          "class": "holder",
+          "mass": 0.3,
+          "description": "3d printed",
+          "cad": "/home/holder.stl",
+          "assembly_id": false,
+          "bbox": [
+            205,
+            308,
+            150,
+            52
+          ],
+          "effector": ""
+        },
+        {
+          "id": "h2",
+          "name": "holder2",
+          "class": "holder",
+          "mass": 0.3,
+          "description": "3d printed",
+          "cad": "/home/holder.stl",
+          "assembly_id": false,
+          "bbox": [
+            205,
+            308,
+            150,
+            52
+          ],
+          "effector": ""
+        }
+      ],
+      "locations": [
+        {
+          "name": "h1-1",
+          "x": -10.0,
+          "y": 136.0,
+          "z": 0.0,
+          "a": -90.0
+        },
+        {
+          "name": "h1-2",
+          "x": -10.0,
+          "y": 136.0,
+          "z": -58.0,
+          "a": -90.0
+        },
+        {
+          "name": "h1-3",
+          "x": -10.0,
+          "y": 143.0,
+          "z": -58.0,
+          "a": -90.0
+        },
+        {
+          "name": "h1-4",
+          "x": 0.0,
+          "y": 136.0,
+          "z": -58.0,
+          "a": -90.0
+        },
+        {
+          "name": "X0_Y0_Z0_A0",
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "a": 0.0
+        }
+      ]
+    },
+    "cobot280": {
+      "pose": null
+    },
+    "gripper": {},
+    "arduino": {}
+  },
+  "tools": {
+    "t1": {
+      "id": "t1",
+      "name": "Gripper",
+      "class": "tool",
+      "mass": 0.3,
+      "description": "3d printed",
+      "cad": "/home/gripper.stl",
+      "assembly_id": false,
+      "bbox": [
+        215,
+        308,
+        75,
+        58
+      ],
+      "work_offset": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "a": 0
+      },
+      "holder_offset": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "a": 0
+      },
+      "location": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "a": 0
+      },
+      "machine": "gantry",
+      "parent": "gantryend"
+    },
+    "t2": {
+      "id": "t2",
+      "name": "Screwdriver",
+      "class": "tool",
+      "mass": 0.3,
+      "description": "3d printed",
+      "cad": "/home/screwdriver.stl",
+      "assembly_id": false,
+      "bbox": [
+        305,
+        308,
+        52,
+        52
+      ],
+      "work_offset": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "a": 0
+      },
+      "holder_offset": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "a": 0
+      },
+      "location": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "a": 0
+      },
+      "machine": "gantry",
+      "parent": "holder1"
+    }
+  }
+}

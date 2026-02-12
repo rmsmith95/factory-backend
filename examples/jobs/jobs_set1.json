@@ -1,0 +1,43 @@
+{
+  "1": {
+    "machine": "gantry",
+    "action": "step",
+    "params": {
+      "x": 0,
+      "y": 5,
+      "z": 0,
+      "a": 0,
+      "speed": 3000
+    },
+    "id": "1"
+  },
+  "2": {
+    "machine": "cobot280",
+    "action": "fetchPositions",
+    "id": "2"
+  },
+  "3": {
+    "machine": "cobot280",
+    "action": "fetchPositions",
+    "id": "3"
+  },
+  "4": {
+    "machine": "cobot280",
+    "action": "moveJoint",
+    "params": 0,
+    "id": "4"
+  },
+  "5": {
+    "machine": "cobot280",
+    "action": "moveJoints",
+    "params": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "id": "5"
+  }
+}
