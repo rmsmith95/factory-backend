@@ -61,8 +61,27 @@ class JobsManager:
             self.jobs = {}
         return self
     
+    def save_jobs(self) -> bool:
+        if not self.jobs_file:
+            logging.warning("save_jobs: jobs_file path is empty")
+            return False
+
+        try:
+            # Ensure parent directory exists
+            os.makedirs(os.path.dirname(self.jobs_file), exist_ok=True)
+
+            with open(self.jobs_file, "w") as f:
+                json.dump(self.jobs, f, indent=2)
+
+            logging.info(f"Saved jobs to {self.jobs_file}")
+            return True
+
+        except Exception as e:
+            logging.error(f"Error saving jobs file: {e}")
+            return False
+    
     def add_job(self):
-        new_id = self._job_counter
+        new_id = str(self._job_counter)
         self._job_counter += 1
         new_job = {
             "id": new_id,
@@ -71,23 +90,22 @@ class JobsManager:
             "params": {"x": 0,"y": 5,"z": 0,"a": 0,"speed": 3000},
         }
         self.jobs[new_id] = new_job
+        self.save_jobs()
         return new_id
     
     def update_job(self,job):
-        # Assign new ID if missing
-        # if not job_id or job_id == "" or job_id == '':
-        #     self._job_counter += 1
-        #     job["id"] = f"J{self._job_counter}"
         self.jobs[job["id"]] = job
+        self.save_jobs()
         return job['id']
     
     def delete_job(self, job_id: str) -> bool:
         if job_id in self.jobs:
             del self.jobs[job_id]
+            self.save_jobs()
             return True
         return False
     
-    async def run_job(self, job, machine):
+    def run_job(self, job, machine):
         """ """
 
         action = job['action']
@@ -97,18 +115,20 @@ class JobsManager:
         if not method:
             print(f"⚠ Method missing on machine: {machine}.{action}")
             return
-
-        result = method(params)
+        
+        logging.info(f'method`:{method}, params:{params}')
+        result = method(**params)
 
         if inspect.isawaitable(result):
-            return await result
-
+            return result
+        
+        self.save_jobs()
         return result
 
     # -------------------------
     # macro runner helper
     # -------------------------
 
-    async def run_jobs(self, jobs: list, machines):
+    def run_jobs(self, jobs: list, machines):
         for job in jobs:
-            await self.run_action(job)
+            self.run_action(job)

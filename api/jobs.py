@@ -11,7 +11,6 @@ logging.basicConfig(level=logging.INFO)
 @router.post("/add_job")
 async def add_job(request: Request):
     job_id = await asyncio.to_thread(request.app.state.factory.add_job)
-    # logging.info(f'add_job: "{job_id}"')
     return {"status": "ok", "job_id": job_id}
 
 
@@ -21,7 +20,7 @@ class UpdateJobRequest(BaseModel):
 
 @router.post("/update_job")
 async def update_job(req: UpdateJobRequest, request: Request):
-    logging.info(f'update_job')
+    # logging.info(f'update_job')
     job_id = await asyncio.to_thread(request.app.state.factory.update_job, req.job)
     return {"status": "ok", "job_id": job_id}
 
@@ -42,9 +41,14 @@ def get_jobs(request: Request):
     return request.app.state.factory.jobs
 
 
-@router.get("/run_job")
-async def run_job(job_id: str, request: Request):
-    # Run job in thread to avoid blocking FastAPI
+class RunJobRequest(BaseModel):
+    job_id: str
+
+@router.post("/run_job")
+async def run_job(payload: RunJobRequest, request: Request):
+    job_id = payload.job_id
+    logging.info(f'run_job: "{job_id}"')
+
     await asyncio.to_thread(request.app.state.factory.run_job, job_id)
     return {"status": "ok"}
 

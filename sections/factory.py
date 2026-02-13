@@ -6,8 +6,8 @@ from machines.gantry import Gantry
 from machines.cobot280 import Cobot280
 from machines.gripper import ST3020Gripper
 from machines.arduino import Arduino
-from .jobs import JobsManager
-from .parts import PartsManager
+from .jobs_manager import JobsManager
+from .parts_manager import PartsManager
 import os
 
 
@@ -117,9 +117,9 @@ class Factory:
         job = self.jobs[job_id]
         machine_name = job['machine']
         machine = self.machines[machine_name]
+        logging.info(f'run_job: "{job_id}"')
         self.jobs_manager.run_job(job, machine)
         self.save_factory()
-        logging.info(f'run_job: "{job_id}"')
     
     def run_script(self, path):
         self.jobs_manager.run_script(path)

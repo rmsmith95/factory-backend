@@ -112,7 +112,7 @@ class Gantry:
         self.send("G91")
         return self.send(f"G1 X{x} Y{y} Z{z} A{a} F{speed}")
 
-    def unlock(self, time_s: float):
+    def unlock(self, time_s: float=5):
         self.send("M8")
         time.sleep(time_s)
         self.send("M9")
