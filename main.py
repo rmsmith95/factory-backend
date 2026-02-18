@@ -60,7 +60,7 @@ async def get_health():
         "machines": {
             "gantry": machines["gantry"].is_connected(),
             "gripper": machines["gripper"].is_connected(),
-            "arduino": machines["arduino"].is_connected(),
+            "rpi": machines["rpi"].is_connected(),
             "cobot280": machines["cobot280"].is_connected(),
         },
     }
