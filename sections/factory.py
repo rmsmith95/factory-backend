@@ -5,7 +5,7 @@ import json
 from machines.gantry import Gantry
 from machines.cobot280 import Cobot280
 from machines.gripper import ST3020Gripper
-from machines.arduino import Arduino
+from machines.raspberry_pi import RaspberryPi
 from .jobs_manager import JobsManager
 from .parts_manager import PartsManager
 import os
@@ -18,7 +18,7 @@ class Factory:
     """
 
     def __init__(self):
-        self.machines = {'gantry': Gantry(), 'cobot280': Cobot280(), 'gripper': ST3020Gripper(), 'arduino': Arduino()}
+        self.machines = {'gantry': Gantry(), 'cobot280': Cobot280(), 'gripper': ST3020Gripper(), 'rpi': RaspberryPi()}
         self.parts_manager = PartsManager()
         self.jobs_manager = JobsManager()
         self.tools: Dict[str, dict] = {}
@@ -39,7 +39,7 @@ class Factory:
         
         machines = data.get("machines", {})
         gantry = machines['gantry']
-        self.machines = {'gantry': Gantry(), 'cobot280': Cobot280(), 'gripper': ST3020Gripper(), 'arduino': Arduino()}
+        self.machines = {'gantry': Gantry(), 'cobot280': Cobot280(), 'gripper': ST3020Gripper(), 'rpi': RaspberryPi()}
         self.machines['gantry'].holders = gantry['holders']
         self.machines['gantry'].locations = gantry['locations']
         self.machines['gantry'].toolend = gantry['toolend']

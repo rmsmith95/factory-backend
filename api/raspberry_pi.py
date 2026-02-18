@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter()
-arduino = None  # global persistent serial object
+rpi = None  # global persistent serial object
 
 class ConnectRequest(BaseModel):
     method: str
@@ -17,13 +17,13 @@ class ConnectRequest(BaseModel):
 
 @router.post("/connect")
 def connect(req: ConnectRequest, request: Request):
-    arduino = request.app.state.factory.machines['arduino']
-    return arduino.connect(req.method, req.ip, req.port, req.com, req.baud)
+    rpi = request.app.state.factory.machines['rpi']
+    return rpi.connect(req.method, req.ip, req.port, req.com, req.baud)
 
 def send_cmd(cmd: str):
-    if arduino is None or not arduino.is_open:
-        raise HTTPException(status_code=400, detail="Arduino not connected")
-    arduino.write((cmd + "\n").encode())
+    if rpi is None or not rpi.is_open:
+        raise HTTPException(status_code=400, detail="RPi not connected")
+    rpi.write((cmd + "\n").encode())
     time.sleep(0.05)
 
 
@@ -46,21 +46,21 @@ class Screw(BaseModel):
 
 @router.post("/screw_clockwise")
 def screw_clockwise(req: Screw, request: Request):
-    arduino = request.app.state.factory.machines['arduino']
-    lines = arduino.screw("FWD", req.duration, req.speed)
+    rpi = request.app.state.factory.machines['rpi']
+    lines = rpi.screw("FWD", req.duration, req.speed)
     return {"status": "completed", "response": lines}
 
 
 @router.post("/screw_reverse")
 def screw_reverse(req: Screw, request: Request):
-    arduino = request.app.state.factory.machines['arduino']
-    # lines = arduino.screw("CCW", req.duration, req.speed)
-    lines = arduino.screw("BKW", req.duration, req.speed)
+    rpi = request.app.state.factory.machines['rpi']
+    # lines = rpi.screw("CCW", req.duration, req.speed)
+    lines = rpi.screw("BKW", req.duration, req.speed)
     return {"status": "completed", "response": lines}
 
 
 @router.post("/screwdriver_stop")
 def screwdriver_stop(request: Request):
-    arduino = request.app.state.factory.machines['arduino']
-    lines = arduino.screw("STOP")
+    rpi = request.app.state.factory.machines['rpi']
+    lines = rpi.screw("STOP")
     return {"status": "completed", "response": lines}
