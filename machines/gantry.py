@@ -43,6 +43,11 @@ class Gantry:
         except Exception as e:
             logging.error(f"Parse error on info: {e}")
         return False
+    
+    def home(self):
+        """Sets internal coordinate system origin (G92)."""
+        logging.info(f"Homing...")
+        return self.send(f"G28")
 
     def set_position(self, x, y, z, a):
         """Sets internal coordinate system origin (G92)."""

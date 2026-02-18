@@ -32,9 +32,6 @@ class MoveXYZRequest(BaseModel):
     a: float
     speed: float  # mm/min
 
-class UnlockRequest(BaseModel):
-    time_s: float
-
 class RawCommandRequest(BaseModel):
     command: str
     delay: float = 0.05
@@ -113,23 +110,13 @@ async def step(req: MoveXYZRequest, request: Request):
     return {"status": "ok", "delta": req.dict()}
 
 
-@router.post("/unlock")
-async def unlock(req: UnlockRequest, request: Request):
-    gantry = request.app.state.factory.machines['gantry']
-    if not gantry:
-        raise HTTPException(400, "Gantry not connected")
-
-    await asyncio.to_thread(gantry.unlock, req.time_s)
-    return {"status": "completed"}
-
-
-@router.post("/reset")
+@router.post("/home")
 async def reset(request: Request):
     gantry = request.app.state.factory.machines['gantry']
     if not gantry:
         raise HTTPException(400, "Gantry not connected")
 
-    await asyncio.to_thread(gantry.reset)
+    await asyncio.to_thread(gantry.home)
     return {"status": "ok"}
 
 class Location(BaseModel):
