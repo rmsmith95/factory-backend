@@ -1,175 +1,77 @@
-import serial
-import time
 import logging
-import re
-from sections.utils import Connection, Pose
 import threading
-
+import requests
+import time
+import re
 
 class Gantry:
-    def __init__(self):
-        self.connection = Connection()
-        self.pose = None
-        self.holders = []
-        self.locations = []
-        self.toolend = None
+    def __init__(self, host="192.168.1.60"):
+        self.host = host
+        self.base_url = f"http://{self.host}/printer/gcode/script"
+        self.toolend = {'position': {'x': 0, 'y': 0, 'z': 0, 'a': 0}}
         self._io_lock = threading.Lock()
+        self.in_motion = False
 
-
-    def connect(self, method, ip, port, com, baud, timeout=3):
-        # close existing serial if open
-        if self.connection and self.connection.serial:
-            if self.connection.serial.is_open:
-                self.connection.serial.close()
-
-        self.connection = Connection(method, ip, port, com, baud, timeout)
-        self.connection.serial = serial.Serial(com, baud, timeout=timeout)
-        self.set_position(**self.toolend['position'])
-        logging.info(f"Connected to TinyG on {com}")
-        return True
-
-    def is_connected(self) -> bool:
-        if self.connection:
-            self.connection.connected = self.connection.serial is not None and self.connection.serial.is_open
-            return self.connection.connected
-        return False
-
-    def send(self, command, delay=0.05):
-        if not self.is_connected():
-            return False
-
+    def send(self, cmd):
+        """Thread-safe G-code dispatch via Moonraker API."""
         with self._io_lock:
-            self.connection.serial.write((command + "\n").encode())
-            time.sleep(delay)
-            # return self.read_response()
-            lines = []
-            while self.connection.serial.in_waiting:
-                lines.append(
-                    self.connection.serial.readline().decode(errors="ignore").strip()
-                )
-            return lines
-
+            try:
+                # Moonraker expects JSON for the script endpoint
+                response = requests.post(self.base_url, json={"script": cmd}, timeout=5)
+                response.raise_for_status()
+                # Klipper returns an 'ok' or the command output in 'result'
+                return response.json().get('result', "")
+            except Exception as e:
+                logging.error(f"G-code failed: {cmd} | Error: {e}")
+                return None
 
     def get_info(self):
-        if not self.is_connected():
-            return False
-        lines = self.send("?")
-        info = {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0,
-            "a": 0.0,
-            "feedrate": 0.0,
-            "velocity": 0.0,
-            "machine_state": None,
-        }
-        if not lines:
-            return False
-
-        for line in lines:
-            if line.startswith("X position"):
-                info["x"] = float(re.findall(r"[-\d.]+", line)[0])
-            elif line.startswith("Y position"):
-                info["y"] = float(re.findall(r"[-\d.]+", line)[0])
-            elif line.startswith("Z position"):
-                info["z"] = float(re.findall(r"[-\d.]+", line)[0])
-            elif line.startswith("A position"):
-                info["a"] = float(re.findall(r"[-\d.]+", line)[0])
-            elif line.startswith("Feed rate"):
-                info["feedrate"] = float(re.findall(r"[-\d.]+", line)[0])
-            elif line.startswith("Velocity"):
-                info["velocity"] = float(re.findall(r"[-\d.]+", line)[0])
-            elif line.startswith("Machine state"):
-                info["machine_state"] = line.split(":", 1)[1].strip()
-
-        if self.toolend['position']:
-            self.toolend['position'] = {'x': info['x'], 'y':info['y'], 'z':info['z'], 'a':info['a']}
-        logging.debug(f"get_info: {info}")
-        return info
-
+        """Fetches current position using M114 (Standard Klipper G-code)."""
+        # M114 is more standard for coordinates than GET_POSITION
+        res = self.send("M114")
+        if not res: return False
+        
+        # M114 typically returns: X:0.000 Y:0.000 Z:0.000 A:0.000 ...
+        try:
+            coords = {
+                k.lower(): float(v) 
+                for k, v in re.findall(r"([XYZA]):([-?\d.]+)", res)
+            }
+            if coords:
+                self.toolend['position'].update(coords)
+                return coords
+        except Exception as e:
+            logging.error(f"Parse error on info: {e}")
+        return False
 
     def set_position(self, x, y, z, a):
-        logging.info(f"set_position {x, y, z, a}")
+        """Sets internal coordinate system origin (G92)."""
+        logging.info(f"Setting logical position to X{x} Y{y} Z{z} A{a}")
         return self.send(f"G92 X{x} Y{y} Z{z} A{a}")
 
-    def _goto(self, x, y, z, a, speed):
-        """Run motion in background thread"""
-        self.in_motion = True
+    def _goto_task(self, x, y, z, a, speed):
+        """Internal background task for motion."""
         try:
-            self.send("G90")
+            self.send("G90") # Ensure Absolute Positioning
             self.send(f"G1 X{x} Y{y} Z{z} A{a} F{speed}")
+            self.send("M400") # Wait for moves to finish
         finally:
             self.in_motion = False
-        logging.info(f"goto {x, y, z, a, speed}")
 
     def goto(self, x, y, z, a, speed):
-        """Non-blocking API: motion runs in background"""
-        t = threading.Thread(target=self._goto, args=(x, y, z, a, speed), daemon=True)
+        """Non-blocking motion API."""
+        if self.in_motion:
+            logging.warning("Gantry already in motion.")
+            return False
+        
+        self.in_motion = True
+        t = threading.Thread(target=self._goto_task, args=(x, y, z, a, speed), daemon=True)
         t.start()
         return True
 
-    def step(self, x, y, z, a, speed):
-        self.send("G91")
-        return self.send(f"G1 X{x} Y{y} Z{z} A{a} F{speed}")
-
-    def unlock(self, time_s: float=5):
-        self.send("M8")
-        time.sleep(time_s)
-        self.send("M9")
-
-    def reset(self):
-        self.connection.serial.write(b"\x18")
-        time.sleep(0.2)
-    
-    def detach(self, target=None):
-        """detach current end effector to target holder"""
-        target_holder = None
-        if target is None:
-            for holder in self.holders:
-                if holder.effector == "":
-                    target_holder = holder
-                    break
-        else:
-            for holder in self.holders:
-                if holder.name == target:
-                    target_holder = holder
-                    break
-
-        if target_holder is None:
-            return False
-        
-        holder_out_pose = self.locations[f"{target}_out"]
-        self.goto(holder_out_pose)
-        time.sleep(10)
-        holder_in_pose = self.locations[f"{target}_in"]
-        self.goto(holder_in_pose)
-        time.sleep(3)
-        self.unlock()
-        time.sleep(1)
-        self.goto(holder_out_pose)
-        return True
-    
-    def attach(self, target):
-        """attach end effector from its holder to the toolend. detach first if required"""
-        if self.toolend.effector != "":
-            self.detach()
-        
-        target_holder = None
-        for holder in self.holders:
-            if holder.name == target:
-                target_holder = holder
-
-        if target_holder is None:
-            return False
-        
-        holder_out_pose = self.locations[f"{target}_out"]
-        self.goto(holder_out_pose)
-        time.sleep(10)
-        holder_in_pose = self.locations[f"{target}_in"]
-        self.goto(holder_in_pose)
-        time.sleep(3)
-        self.unlock()
-        time.sleep(1)
-        self.goto(holder_out_pose)
-        return True
-
+    def step(self, x=0, y=0, z=0, a=0, speed=1000):
+        """Incremental move (G91)."""
+        self.send("G91") # Relative Positioning
+        res = self.send(f"G1 X{x} Y{y} Z{z} A{a} F{speed}")
+        self.send("G90") # Return to Absolute safely
+        return res
