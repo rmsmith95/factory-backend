@@ -11,6 +11,9 @@ class Gantry:
         self.toolend = {'position': {'x': 0, 'y': 0, 'z': 0, 'a': 0}}
         self._io_lock = threading.Lock()
         self.in_motion = False
+    
+    def is_connected(self):
+        return True
 
     def send(self, cmd):
         """Thread-safe G-code dispatch via Moonraker API."""
