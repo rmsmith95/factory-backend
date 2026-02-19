@@ -34,12 +34,12 @@ except (ImportError, RuntimeError):
 
 
 class RaspberryPi:
-    def __init__(self, dir_pin=20, pwm_pin=21, en_pin=16, pwm_freq=1000):
+    def __init__(self, dir_pin=20, pwm_pin=21, lock_pin=16, pwm_freq=1000):
         self.dir_pin = dir_pin
         self.pwm_pin = pwm_pin
-        self.en_pin = en_pin
         self.pwm_freq = pwm_freq
         self.pwm = None
+        self.lock_pin = lock_pin
         self.connected = False
 
     def connect(self):
@@ -47,11 +47,11 @@ class RaspberryPi:
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.dir_pin, GPIO.OUT)
         GPIO.setup(self.pwm_pin, GPIO.OUT)
-        GPIO.setup(self.en_pin, GPIO.OUT)
+        GPIO.setup(self.lock_pin, GPIO.OUT)
 
         self.pwm = GPIO.PWM(self.pwm_pin, self.pwm_freq)
         self.pwm.start(0)  # start with 0% duty cycle
-        GPIO.output(self.en_pin, GPIO.HIGH)  # enable motor driver
+        # GPIO.output(self.lock_pin, GPIO.Low)  # enable motor driver
 
         self.connected = True
         logging.info("Connected to Raspberry Pi GPIO")
@@ -94,6 +94,23 @@ class RaspberryPi:
             self.pwm.ChangeDutyCycle(0)
 
         return [f"{direction} {speed}% for {duration}s"]
+    
+    def unlock(self, time_s: float = 10.0):
+        """ Retracts the solenoid lock for a specified duration. """
+        # if not self.is_connected():
+        #     logging.error("GPIO not initialized")
+        #     return
+            
+        logging.info(f"Unlocking solenoid for {time_s}s")
+        
+        try:
+            # Energize to retract (Unlock)
+            GPIO.output(self.lock_pin, GPIO.HIGH) 
+            time.sleep(time_s)
+        finally:
+            # De-energize to extend (Lock)
+            GPIO.output(self.lock_pin, GPIO.LOW)
+            logging.info("Solenoid locked")
 
     def cleanup(self):
         """Cleanup GPIO on exit"""

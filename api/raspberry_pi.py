@@ -20,29 +20,22 @@ def connect(req: ConnectRequest, request: Request):
     rpi = request.app.state.factory.machines['rpi']
     return rpi.connect(req.method, req.ip, req.port, req.com, req.baud)
 
-def send_cmd(cmd: str):
-    if rpi is None or not rpi.is_open:
-        raise HTTPException(status_code=400, detail="RPi not connected")
-    rpi.write((cmd + "\n").encode())
-    time.sleep(0.05)
-
 
 class UnlockRequest(BaseModel):
     time_s: float  # seconds to unlock
 
 
 @router.post("/unlock")
-def unlock(req: UnlockRequest):
-    send_cmd("ON")
-    time.sleep(req.time_s)
-    send_cmd("OFF")
-    time.sleep(1)
+def unlock(req: UnlockRequest, request: Request):
+    rpi = request.app.state.factory.machines['rpi']
+    rpi.unlock(UnlockRequest.time_s)
     return {"status": "completed"}
 
 
 class Screw(BaseModel):
     duration: int
     speed: int
+
 
 @router.post("/screw_clockwise")
 def screw_clockwise(req: Screw, request: Request):
