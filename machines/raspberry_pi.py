@@ -8,6 +8,7 @@ import os
 try:
     import RPi.GPIO as GPIO
     IS_RPI = True
+    logging.warning(f"Running on real RPi GPIO: {IS_RPI}")
 except (ImportError, RuntimeError):
     IS_RPI = False
     logging.warning("RPi.GPIO not found or not on Pi. Switching to Mock mode.")
@@ -42,7 +43,7 @@ class RaspberryPi:
         self.lock_pin = lock_pin
         self.pwm_freq = pwm_freq
         self.pwm = None
-        self.status = "connected"
+        self.status = "disconnected"
 
 
     def connect(self, method, ip, port, com, baud, timeout=10):
@@ -53,15 +54,17 @@ class RaspberryPi:
         self.pwm = GPIO.PWM(self.ena_pin, self.pwm_freq)
         self.pwm.start(0)
         
-        self.connected = True
+        self.status = "connected"
         logging.info(f"GPIO Initialized: IN1={self.in1}, IN2={self.in2}, ENA={self.ena_pin}")
         return {"status": "connected"}
     
     def is_connected(self):
-        return True
+        if self.status == "connected":
+            return True
+        return False
 
     def screw(self, direction: str, duration: float = 0, speed: int = 50):
-        if not self.connected: raise RuntimeError("GPIO not initialized")
+        if not self.is_connected(): raise RuntimeError("GPIO not initialized")
         
         direction = direction.upper()
         duty = max(0, min(100, speed)) # Ensure speed is 0-100%
