@@ -34,66 +34,53 @@ except (ImportError, RuntimeError):
 
 
 class RaspberryPi:
-    def __init__(self, dir_pin=20, pwm_pin=21, lock_pin=16, pwm_freq=1000):
-        self.dir_pin = dir_pin
-        self.pwm_pin = pwm_pin
+    def __init__(self, in1=23, in2=24, ena=12, lock_pin=16, pwm_freq=1000):
+        # BCM Pin Mapping: Physical 16->23, Physical 18->24, Physical 32->12
+        self.in1 = in1
+        self.in2 = in2
+        self.ena_pin = ena
+        self.lock_pin = lock_pin
         self.pwm_freq = pwm_freq
         self.pwm = None
-        self.lock_pin = lock_pin
         self.connected = False
 
-    def connect(self, method, ip, port, com, baud):
-        """Initialize GPIO pins on Raspberry Pi"""
+    def connect(self, **kwargs):
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.dir_pin, GPIO.OUT)
-        GPIO.setup(self.pwm_pin, GPIO.OUT)
-        GPIO.setup(self.lock_pin, GPIO.OUT)
-
-        self.pwm = GPIO.PWM(self.pwm_pin, self.pwm_freq)
-        self.pwm.start(0)  # start with 0% duty cycle
-        # GPIO.output(self.lock_pin, GPIO.Low)  # enable motor driver
-
+        GPIO.setup([self.in1, self.in2, self.lock_pin, self.ena_pin], GPIO.OUT)
+        
+        # Initialize PWM on the ENA pin
+        self.pwm = GPIO.PWM(self.ena_pin, self.pwm_freq)
+        self.pwm.start(0)
+        
         self.connected = True
-        logging.info("Connected to Raspberry Pi GPIO")
-        return {"status": "connected", "type": "gpio"}
-
-    def is_connected(self) -> bool:
-        return self.connected
+        logging.info(f"GPIO Initialized: IN1={self.in1}, IN2={self.in2}, ENA={self.ena_pin}")
+        return {"status": "connected"}
 
     def screw(self, direction: str, duration: float = 0, speed: int = 50):
-        """
-        direction: 'CW', 'CCW', or 'STOP'
-        duration: seconds (ignored for STOP)
-        speed: 0-100 (duty cycle %)
-        """
-        if not self.is_connected():
-            logging.info("Raspberry Pi GPIO not initialized")
-            raise RuntimeError("GPIO not initialized")
-
+        if not self.connected: raise RuntimeError("GPIO not initialized")
+        
         direction = direction.upper()
+        duty = max(0, min(100, speed)) # Ensure speed is 0-100%
 
-        if direction == "STOP":
-            logging.info("Stopping motor")
+        if direction == "CW":
+            GPIO.output(self.in1, GPIO.HIGH)
+            GPIO.output(self.in2, GPIO.LOW)
+            self.pwm.ChangeDutyCycle(duty)
+        elif direction == "CCW":
+            GPIO.output(self.in1, GPIO.LOW)
+            GPIO.output(self.in2, GPIO.HIGH)
+            self.pwm.ChangeDutyCycle(duty)
+        else: # STOP
+            GPIO.output(self.in1, GPIO.LOW)
+            GPIO.output(self.in2, GPIO.LOW)
             self.pwm.ChangeDutyCycle(0)
             return ["STOP"]
 
-        if direction not in ("CW", "CCW"):
-            raise ValueError("Direction must be 'CW', 'CCW', or 'STOP'")
-
-        # Set direction pin
-        GPIO.output(self.dir_pin, GPIO.HIGH if direction == "CW" else GPIO.LOW)
-
-        logging.info(f"GPIO screwdriver cmd: {direction}, speed={speed}, duration={duration}s")
-
-        # Set speed
-        self.pwm.ChangeDutyCycle(max(0, min(100, speed)))
-
-        # Run for duration
         if duration > 0:
             time.sleep(duration)
-            self.pwm.ChangeDutyCycle(0)
+            self.screw("STOP")
 
-        return [f"{direction} {speed}% for {duration}s"]
+        return [f"{direction} at {speed}% for {duration}s"]
     
     def unlock(self, time_s: float = 10.0):
         """ Retracts the solenoid lock for a specified duration. """
