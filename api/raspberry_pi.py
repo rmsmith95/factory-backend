@@ -37,23 +37,23 @@ class Screw(BaseModel):
     speed: int
 
 
-@router.post("/screw_clockwise")
-def screw_clockwise(req: Screw, request: Request):
+@router.post("/screw_cw")
+def screw_cw(req: Screw, request: Request):
     rpi = request.app.state.factory.machines['rpi']
-    lines = rpi.screw("FWD", req.duration, req.speed)
+    lines = rpi.screw("CW", req.duration, req.speed)
     return {"status": "completed", "response": lines}
 
 
-@router.post("/screw_reverse")
-def screw_reverse(req: Screw, request: Request):
+@router.post("/screw_ccw")
+def screw_ccw(req: Screw, request: Request):
     rpi = request.app.state.factory.machines['rpi']
     # lines = rpi.screw("CCW", req.duration, req.speed)
-    lines = rpi.screw("BKW", req.duration, req.speed)
+    lines = rpi.screw("CCW", req.duration, req.speed)
     return {"status": "completed", "response": lines}
 
 
-@router.post("/screwdriver_stop")
-def screwdriver_stop(request: Request):
+@router.post("/screw_stop")
+def screw_stop(request: Request):
     rpi = request.app.state.factory.machines['rpi']
     lines = rpi.screw("STOP")
     return {"status": "completed", "response": lines}

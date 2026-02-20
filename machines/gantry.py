@@ -28,23 +28,30 @@ class Gantry:
                 logging.error(f"G-code failed: {cmd} | Error: {e}")
                 return None
 
-    def get_info(self):
+    def get_pose(self):
         """Fetches current position using M114 (Standard Klipper G-code)."""
-        # M114 is more standard for coordinates than GET_POSITION
+        # M114 is the standard Klipper command for G-code position
         res = self.send("M114")
-        if not res: return False
+        if not res: 
+            return False
         
-        # M114 typically returns: X:0.000 Y:0.000 Z:0.000 A:0.000 ...
+        # Klipper M114 typically returns: "X:0.00 Y:0.00 Z:0.00 E:0.00 Count X:0 Y:0 Z:0"
+        # This regex captures the axis letter and its float value, ignoring "Count"
+        logging.info(f'M114 result: {res}')
         try:
-            coords = {
-                k.lower(): float(v) 
-                for k, v in re.findall(r"([XYZA]):([-?\d.]+)", res)
-            }
+            matches = re.findall(r"([XYZE]):\s*([-?\d.]+)", res)
+            coords = {k.lower(): float(v) for k, v in matches}
+            
             if coords:
+                # Update the internal state and return the new pose
+                if 'position' not in self.toolend:
+                    self.toolend['position'] = {}
                 self.toolend['position'].update(coords)
                 return coords
+                
         except Exception as e:
-            logging.error(f"Parse error on info: {e}")
+            logging.error(f"Failed to parse M114 response '{res}': {e}")
+            
         return False
     
     def home(self):

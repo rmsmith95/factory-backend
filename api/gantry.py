@@ -61,14 +61,14 @@ async def connect(req: ConnectRequest, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/get_info")
+@router.get("/get_pose")
 async def get_info(request: Request):
     gantry = request.app.state.factory.machines.get("gantry")
     if not gantry:
         return {"connected": False}
 
     try:
-        info = await asyncio.to_thread(gantry.get_info)
+        info = await asyncio.to_thread(gantry.get_pose)
         return {"connected": True, **info}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
