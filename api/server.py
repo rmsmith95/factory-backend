@@ -11,14 +11,18 @@ class ConnectRequest(BaseModel):
     method: str
     com: str
     baud: int = 115200
-    ip: str = ''
+    ip: str = '10.163.187.60'
     port: int = 8000
     timeout: float = 3.0  # seconds
 
 @router.post("/connect")
 def connect(req: ConnectRequest, request: Request):
     rpi = request.app.state.factory.machines['rpi']
-    return rpi.connect(req.method, req.ip, req.port, req.com, req.baud)
+    connected = rpi.connect(req.method, req.ip, req.port, req.com, req.baud)
+    return {
+        "connected": connected,
+        "status": rpi.status
+    }
 
 
 class UnlockRequest(BaseModel):

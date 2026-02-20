@@ -42,9 +42,10 @@ class RaspberryPi:
         self.lock_pin = lock_pin
         self.pwm_freq = pwm_freq
         self.pwm = None
-        self.connected = False
+        self.status = "connected"
 
-    def connect(self, **kwargs):
+
+    def connect(self, method, ip, port, com, baud, timeout=10):
         GPIO.setmode(GPIO.BCM)
         GPIO.setup([self.in1, self.in2, self.lock_pin, self.ena_pin], GPIO.OUT)
         
