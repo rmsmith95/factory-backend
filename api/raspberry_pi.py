@@ -33,8 +33,8 @@ def unlock(req: UnlockRequest, request: Request):
 
 
 class Screw(BaseModel):
-    duration: int
-    speed: int
+    duration: float
+    speed: float
 
 
 @router.post("/motor_cw")
