@@ -55,6 +55,9 @@ class RaspberryPi:
         self.connected = True
         logging.info(f"GPIO Initialized: IN1={self.in1}, IN2={self.in2}, ENA={self.ena_pin}")
         return {"status": "connected"}
+    
+    def is_connected(self):
+        return True
 
     def screw(self, direction: str, duration: float = 0, speed: int = 50):
         if not self.connected: raise RuntimeError("GPIO not initialized")
