@@ -35,12 +35,12 @@ class Gantry:
         """Fetches current position using M114 (Standard Klipper G-code)."""
         # M114 is the standard Klipper command for G-code position
         res = self.send("M114")
+        logging.info(f'M114 result: {res}')
         if not res: 
             return False
         
         # Klipper M114 typically returns: "X:0.00 Y:0.00 Z:0.00 E:0.00 Count X:0 Y:0 Z:0"
         # This regex captures the axis letter and its float value, ignoring "Count"
-        logging.info(f'M114 result: {res}')
         try:
             matches = re.findall(r"([XYZE]):\s*([-?\d.]+)", res)
             coords = {k.lower(): float(v) for k, v in matches}

@@ -68,8 +68,7 @@ async def get_pose(request: Request):
         return {"connected": False}
 
     try:
-        info = await asyncio.to_thread(gantry.get_pose)
-        return {"connected": True, **info}
+        return await asyncio.to_thread(gantry.get_pose)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
