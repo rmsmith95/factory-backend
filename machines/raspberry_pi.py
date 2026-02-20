@@ -42,7 +42,7 @@ class RaspberryPi:
         self.lock_pin = lock_pin
         self.connected = False
 
-    def connect(self):
+    def connect(self, method, ip, port, com, baud):
         """Initialize GPIO pins on Raspberry Pi"""
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.dir_pin, GPIO.OUT)

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from api.gantry import router as gantry_router
 from api.cobot280 import router as cobot280_router
 from api.gripper import router as gripper_router
-from api.raspberry_pi import router as rpi_router
+from api.server import router as rpi_router
 from api.jobs import router as jobs_router
 from sections.factory import Factory
 
@@ -27,7 +27,7 @@ app.add_middleware(
 app.include_router(gantry_router, prefix="/gantry")
 app.include_router(cobot280_router, prefix="/cobot280")
 app.include_router(gripper_router, prefix="/gripper")
-app.include_router(rpi_router, prefix="/rpi")
+app.include_router(rpi_router, prefix="/server")
 app.include_router(jobs_router, prefix="/jobs")
 
 

@@ -11,7 +11,7 @@ class ConnectRequest(BaseModel):
     method: str
     com: str
     baud: int = 115200
-    ip: str = '10.163.187.60'
+    ip: str = ''
     port: int = 8000
     timeout: float = 3.0  # seconds
 
