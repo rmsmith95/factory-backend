@@ -62,7 +62,7 @@ async def connect(req: ConnectRequest, request: Request):
 
 
 @router.get("/get_pose")
-async def get_info(request: Request):
+async def get_pose(request: Request):
     gantry = request.app.state.factory.machines.get("gantry")
     if not gantry:
         return {"connected": False}

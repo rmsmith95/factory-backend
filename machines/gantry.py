@@ -12,6 +12,9 @@ class Gantry:
         self._io_lock = threading.Lock()
         self.in_motion = False
     
+    def connect(self):
+        pass
+    
     def is_connected(self):
         return True
 
