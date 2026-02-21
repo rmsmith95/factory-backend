@@ -1,14 +1,19 @@
 # backend/machines/cameras.py
 import sys
 import cv2
+import threading
+import time
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from typing import Dict
 
 router = APIRouter(prefix="/camera")
 
-# persistent camera handles
+# persistent camera handles and latest frames
 cameras: Dict[str, cv2.VideoCapture] = {}
+latest_frame: Dict[str, bytes] = {}
+camera_threads: Dict[str, threading.Thread] = {}
+stop_flags: Dict[str, threading.Event] = {}
 
 # map logical names → OpenCV indices
 INDEX_MAP = {
@@ -21,10 +26,23 @@ def open_camera(index: int):
     if sys.platform.startswith("win"):
         cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
     else:
-        cap = cv2.VideoCapture(index)  # Linux / Raspberry Pi default backend
+        cap = cv2.VideoCapture(index)  # Linux / Raspberry Pi
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open camera index {index}")
     return cap
+
+
+def camera_loop(cam_id: str):
+    cap = cameras[cam_id]
+    stop_event = stop_flags[cam_id]
+
+    while not stop_event.is_set():
+        success, frame = cap.read()
+        if success:
+            _, buffer = cv2.imencode(".jpg", frame)
+            latest_frame[cam_id] = buffer.tobytes()
+        else:
+            time.sleep(0.01)  # prevent busy loop
 
 
 def get_camera(cam_id: str):
@@ -33,22 +51,24 @@ def get_camera(cam_id: str):
 
     if cam_id not in cameras:
         cameras[cam_id] = open_camera(INDEX_MAP[cam_id])
+        stop_flags[cam_id] = threading.Event()
+        thread = threading.Thread(target=camera_loop, args=(cam_id,), daemon=True)
+        camera_threads[cam_id] = thread
+        thread.start()
 
     return cameras[cam_id]
 
 
-def mjpeg_generator(cap: cv2.VideoCapture):
+def mjpeg_generator(cam_id: str):
     while True:
-        success, frame = cap.read()
-        if not success:
+        frame = latest_frame.get(cam_id)
+        if not frame:
+            time.sleep(0.01)
             continue
-
-        ret, buffer = cv2.imencode(".jpg", frame)
-        frame_bytes = buffer.tobytes()
 
         yield (
             b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
         )
 
 
@@ -75,17 +95,23 @@ def start_camera(cam_id: str):
 @router.post("/{cam_id}/stop")
 def stop_camera(cam_id: str):
     if cam_id in cameras:
+        stop_flags[cam_id].set()
+        camera_threads[cam_id].join(timeout=1)
         cameras[cam_id].release()
         del cameras[cam_id]
+        del camera_threads[cam_id]
+        del stop_flags[cam_id]
+        if cam_id in latest_frame:
+            del latest_frame[cam_id]
     return {"status": "stopped", "camera": cam_id}
 
 
 # -------- MJPEG stream --------
 @router.get("/{cam_id}/stream")
 def stream_camera(cam_id: str):
-    cap = get_camera(cam_id)
+    get_camera(cam_id)
     return StreamingResponse(
-        mjpeg_generator(cap),
+        mjpeg_generator(cam_id),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
@@ -93,13 +119,8 @@ def stream_camera(cam_id: str):
 # -------- Snapshot --------
 @router.get("/{cam_id}/snapshot")
 def snapshot(cam_id: str):
-    cap = get_camera(cam_id)
-    success, frame = cap.read()
-    if not success:
-        raise HTTPException(500, "Failed to capture frame")
-
-    _, buffer = cv2.imencode(".jpg", frame)
-    return StreamingResponse(
-        iter([buffer.tobytes()]),
-        media_type="image/jpeg"
-    )
+    get_camera(cam_id)
+    frame = latest_frame.get(cam_id)
+    if not frame:
+        raise HTTPException(500, "No frame available yet")
+    return StreamingResponse(iter([frame]), media_type="image/jpeg")
