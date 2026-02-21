@@ -9,6 +9,7 @@ from api.gripper import router as gripper_router
 from api.server import router as rpi_router
 from api.jobs import router as jobs_router
 from sections.factory import Factory
+from api.cameras import router as camera_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,6 +30,8 @@ app.include_router(cobot280_router, prefix="/cobot280")
 app.include_router(gripper_router, prefix="/gripper")
 app.include_router(rpi_router, prefix="/server")
 app.include_router(jobs_router, prefix="/jobs")
+app.include_router(camera_router)
+
 
 
 @app.get("/")
