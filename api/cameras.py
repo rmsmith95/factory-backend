@@ -41,9 +41,10 @@ def camera_loop(cam_id: str):
 
 
 def get_camera(cam_id: str):
-    
     if cam_id not in cameras:
-        cameras[cam_id] = open_camera(cam_id)
+        # Convert string id to int if it's a digit (e.g., "0" -> 0)
+        index = int(cam_id) if cam_id.isdigit() else cam_id
+        cameras[cam_id] = open_camera(index)
         stop_flags[cam_id] = threading.Event()
         thread = threading.Thread(target=camera_loop, args=(cam_id,), daemon=True)
         camera_threads[cam_id] = thread
