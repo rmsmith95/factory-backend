@@ -15,11 +15,6 @@ latest_frame: Dict[str, bytes] = {}
 camera_threads: Dict[str, threading.Thread] = {}
 stop_flags: Dict[str, threading.Event] = {}
 
-# map logical names → OpenCV indices
-INDEX_MAP = {
-    "board": 0,
-    "liteplacer": 1,
-}
 
 
 def open_camera(index: int):
@@ -46,11 +41,9 @@ def camera_loop(cam_id: str):
 
 
 def get_camera(cam_id: str):
-    if cam_id not in INDEX_MAP:
-        raise HTTPException(404, f"Unknown camera '{cam_id}'")
-
+    
     if cam_id not in cameras:
-        cameras[cam_id] = open_camera(INDEX_MAP[cam_id])
+        cameras[cam_id] = open_camera(cam_id)
         stop_flags[cam_id] = threading.Event()
         thread = threading.Thread(target=camera_loop, args=(cam_id,), daemon=True)
         camera_threads[cam_id] = thread
