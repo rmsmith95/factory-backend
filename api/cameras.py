@@ -1,4 +1,5 @@
 # backend/machines/cameras.py
+import sys
 import cv2
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -17,7 +18,10 @@ INDEX_MAP = {
 
 
 def open_camera(index: int):
-    cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)  # remove CAP_DSHOW on Linux
+    if sys.platform.startswith("win"):
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+    else:
+        cap = cv2.VideoCapture(index)  # Linux / Raspberry Pi default backend
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open camera index {index}")
     return cap
