@@ -17,38 +17,42 @@ class CameraManager:
         self.stop_event = threading.Event()
         self.thread: Optional[threading.Thread] = None
         self.lock = threading.Lock()
-        self.ref_count = 0  # Track how many active streams are using this camera
+        self.ref_count = 0 
 
     def _capture_loop(self):
-        """Internal loop to continuously pull frames from hardware."""
         while not self.stop_event.is_set():
-            if self.cap is None or not self.cap.isOpened():
-                time.sleep(0.1)
-                continue
+            if self.cap is None:
+                break
             
             success, frame = self.cap.read()
             if success:
-                # Encode to JPEG for the MJPEG stream
-                _, buffer = cv2.imencode(".jpg", frame)
+                _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 self.latest_frame = buffer.tobytes()
             else:
-                # Small sleep to prevent high CPU usage on failed reads
-                time.sleep(0.01)
+                # If read fails, the device might have timed out
+                time.sleep(0.1)
 
     def start(self):
         with self.lock:
             if self.thread is None:
-                # Use V4L2 for Linux/Pi; DSHOW for Windows
-                backend = cv2.CAP_DSHOW if sys.platform.startswith("win") else cv2.CAP_V4L2
+                # Use V4L2 for Pi to avoid backend conflicts
+                backend = cv2.CAP_V4L2 if not sys.platform.startswith("win") else cv2.CAP_DSHOW
                 self.cap = cv2.VideoCapture(self.index, backend)
                 
-                # OPTIONAL: Lower resolution/FPS to save Pi bandwidth
+                # --- THE SELECT() TIMEOUT FIX ---
+                # 1. Force MJPEG (Compressed) to fit multiple cameras on the USB bus
+                self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                
+                # 2. Reduce Resolution (Crucial for multi-camera stability)
                 self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                 self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-                self.cap.set(cv2.CAP_PROP_FPS, 20)
+                
+                # 3. Buffer Settings (Linux Specific)
+                # Setting this to 1 reduces latency and prevents stale frame timeouts
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
                 if not self.cap.isOpened():
-                    raise RuntimeError(f"Could not open camera {self.index}")
+                    raise RuntimeError(f"Hardware Error: Camera {self.index} busy or disconnected")
 
                 self.stop_event.clear()
                 self.thread = threading.Thread(target=self._capture_loop, daemon=True)
@@ -68,7 +72,6 @@ class CameraManager:
                 self.thread = None
                 self.ref_count = 0
 
-# Global storage for active camera managers
 camera_instances: Dict[str, CameraManager] = {}
 global_lock = threading.Lock()
 
@@ -88,19 +91,16 @@ async def mjpeg_generator(cam_id: str):
             if frame:
                 yield (b"--frame\r\n"
                        b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
-            # Cap the generator's output frequency
-            time.sleep(0.04) # ~25 FPS
+            # This sleep ensures we don't saturate the CPU
+            time.sleep(0.05) 
     finally:
         manager.stop()
-
-# --- API Routes ---
 
 @router.get("/detect")
 def detect_cameras():
     available = []
-    # Test first 10 indices
-    for i in range(10):
-        cap = cv2.VideoCapture(i)
+    for i in range(5): # Limit scan to first 5
+        cap = cv2.VideoCapture(i, cv2.CAP_V4L2 if not sys.platform.startswith("win") else cv2.CAP_DSHOW)
         if cap.isOpened():
             available.append(i)
             cap.release()
@@ -108,7 +108,6 @@ def detect_cameras():
 
 @router.get("/{cam_id}/stream")
 def stream_camera(cam_id: str):
-    # This supports multiple tabs; each call starts a generator
     return StreamingResponse(
         mjpeg_generator(cam_id),
         media_type="multipart/x-mixed-replace; boundary=frame"
@@ -117,12 +116,11 @@ def stream_camera(cam_id: str):
 @router.get("/{cam_id}/snapshot")
 def snapshot(cam_id: str):
     manager = get_or_create_manager(cam_id)
-    # Ensure camera is running to take a snapshot
     if not manager.thread:
         manager.start()
-        time.sleep(0.5) # Give it a moment to warm up
+        time.sleep(0.5)
     
     frame = manager.latest_frame
     if not frame:
-        raise HTTPException(status_code=500, detail="Camera frame not ready")
+        raise HTTPException(status_code=500, detail="Frame Capture Timeout")
     return StreamingResponse(iter([frame]), media_type="image/jpeg")
