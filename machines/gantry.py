@@ -32,35 +32,36 @@ class Gantry:
                 return None
 
     def get_pose(self):
-        res = self.send("M114")
-        # CRITICAL: See exactly what the board is sending back
-        logging.info(f"Raw M114 response: '{res}'")
-        
-        if not res or not isinstance(res, str): 
-            return False
+        """Fetches current position directly from Moonraker's object state."""
+        # Use the objects/query endpoint instead of gcode/script
+        query_url = f"http://{self.host}/printer/objects/query?gcode_move"
         
         try:
-            # Improved regex to handle various spacing and potential 'ok' prefix
-            # This looks for Axis:Value patterns specifically
-            matches = re.findall(r"([XYZE]):\s*(-?[\d.]+)", res, re.IGNORECASE)
+            response = requests.get(query_url, timeout=5)
+            response.raise_for_status()
+            data = response.json()
             
-            if not matches:
-                logging.warning(f"No coordinates found in: {res}")
-                return False
+            # Moonraker returns coordinates in the 'gcode_position' array: [x, y, z, e]
+            pos_array = data['result']['status']['gcode_move']['gcode_position']
+            
+            coords = {
+                'x': float(pos_array[0]),
+                'y': float(pos_array[1]),
+                'z': float(pos_array[2]),
+                'e': float(pos_array[3])
+            }
+            
+            # Update internal state
+            if 'position' not in self.toolend:
+                self.toolend['position'] = {}
+            self.toolend['position'].update(coords)
+            
+            return coords
 
-            coords = {k.lower(): float(v) for k, v in matches}
-            
-            # Ensure we at least got X, Y, and Z
-            if all(k in coords for k in ['x', 'y', 'z']):
-                if 'position' not in self.toolend:
-                    self.toolend['position'] = {}
-                self.toolend['position'].update(coords)
-                return coords
-                    
         except Exception as e:
-            logging.error(f"Failed to parse M114: {e}")
-                
-        return res
+            logging.error(f"Failed to fetch position from Moonraker: {e}")
+            return False
+
         
     def home(self):
         """Sets internal coordinate system origin (G92)."""
