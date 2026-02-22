@@ -1,75 +1,104 @@
 # backend/machines/cameras.py
-import sys
 import cv2
 import threading
 import time
+import sys
+from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from typing import Dict
 
 router = APIRouter(prefix="/camera")
 
-# persistent camera handles and latest frames
-cameras: Dict[str, cv2.VideoCapture] = {}
-latest_frame: Dict[str, bytes] = {}
-camera_threads: Dict[str, threading.Thread] = {}
-stop_flags: Dict[str, threading.Event] = {}
+class CameraManager:
+    def __init__(self, index: int):
+        self.index = index
+        self.cap: Optional[cv2.VideoCapture] = None
+        self.latest_frame: Optional[bytes] = None
+        self.stop_event = threading.Event()
+        self.thread: Optional[threading.Thread] = None
+        self.lock = threading.Lock()
+        self.ref_count = 0  # Track how many active streams are using this camera
 
+    def _capture_loop(self):
+        """Internal loop to continuously pull frames from hardware."""
+        while not self.stop_event.is_set():
+            if self.cap is None or not self.cap.isOpened():
+                time.sleep(0.1)
+                continue
+            
+            success, frame = self.cap.read()
+            if success:
+                # Encode to JPEG for the MJPEG stream
+                _, buffer = cv2.imencode(".jpg", frame)
+                self.latest_frame = buffer.tobytes()
+            else:
+                # Small sleep to prevent high CPU usage on failed reads
+                time.sleep(0.01)
 
+    def start(self):
+        with self.lock:
+            if self.thread is None:
+                # Use V4L2 for Linux/Pi; DSHOW for Windows
+                backend = cv2.CAP_DSHOW if sys.platform.startswith("win") else cv2.CAP_V4L2
+                self.cap = cv2.VideoCapture(self.index, backend)
+                
+                # OPTIONAL: Lower resolution/FPS to save Pi bandwidth
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                self.cap.set(cv2.CAP_PROP_FPS, 20)
 
-def open_camera(index: int):
-    if sys.platform.startswith("win"):
-        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
-    else:
-        cap = cv2.VideoCapture(index)  # Linux / Raspberry Pi
-    if not cap.isOpened():
-        raise RuntimeError(f"Failed to open camera index {index}")
-    return cap
+                if not self.cap.isOpened():
+                    raise RuntimeError(f"Could not open camera {self.index}")
 
+                self.stop_event.clear()
+                self.thread = threading.Thread(target=self._capture_loop, daemon=True)
+                self.thread.start()
+            self.ref_count += 1
 
-def camera_loop(cam_id: str):
-    cap = cameras[cam_id]
-    stop_event = stop_flags[cam_id]
+    def stop(self):
+        with self.lock:
+            self.ref_count -= 1
+            if self.ref_count <= 0:
+                self.stop_event.set()
+                if self.thread:
+                    self.thread.join(timeout=1.0)
+                if self.cap:
+                    self.cap.release()
+                self.cap = None
+                self.thread = None
+                self.ref_count = 0
 
-    while not stop_event.is_set():
-        success, frame = cap.read()
-        if success:
-            _, buffer = cv2.imencode(".jpg", frame)
-            latest_frame[cam_id] = buffer.tobytes()
-        else:
-            time.sleep(0.01)  # prevent busy loop
+# Global storage for active camera managers
+camera_instances: Dict[str, CameraManager] = {}
+global_lock = threading.Lock()
 
+def get_or_create_manager(cam_id: str) -> CameraManager:
+    with global_lock:
+        if cam_id not in camera_instances:
+            index = int(cam_id) if cam_id.isdigit() else cam_id
+            camera_instances[cam_id] = CameraManager(index)
+        return camera_instances[cam_id]
 
-def get_camera(cam_id: str):
-    if cam_id not in cameras:
-        # Convert string id to int if it's a digit (e.g., "0" -> 0)
-        index = int(cam_id) if cam_id.isdigit() else cam_id
-        cameras[cam_id] = open_camera(index)
-        stop_flags[cam_id] = threading.Event()
-        thread = threading.Thread(target=camera_loop, args=(cam_id,), daemon=True)
-        camera_threads[cam_id] = thread
-        thread.start()
+async def mjpeg_generator(cam_id: str):
+    manager = get_or_create_manager(cam_id)
+    manager.start()
+    try:
+        while not manager.stop_event.is_set():
+            frame = manager.latest_frame
+            if frame:
+                yield (b"--frame\r\n"
+                       b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
+            # Cap the generator's output frequency
+            time.sleep(0.04) # ~25 FPS
+    finally:
+        manager.stop()
 
-    return cameras[cam_id]
+# --- API Routes ---
 
-
-def mjpeg_generator(cam_id: str):
-    while True:
-        frame = latest_frame.get(cam_id)
-        if not frame:
-            time.sleep(0.01)
-            continue
-
-        yield (
-            b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-        )
-
-
-# -------- Detect camera indices --------
 @router.get("/detect")
 def detect_cameras():
     available = []
+    # Test first 10 indices
     for i in range(10):
         cap = cv2.VideoCapture(i)
         if cap.isOpened():
@@ -77,44 +106,23 @@ def detect_cameras():
             cap.release()
     return {"available_indexes": available}
 
-
-# -------- Start camera --------
-@router.post("/{cam_id}/start")
-def start_camera(cam_id: str):
-    get_camera(cam_id)
-    return {"status": "started", "camera": cam_id}
-
-
-# -------- Stop camera --------
-@router.post("/{cam_id}/stop")
-def stop_camera(cam_id: str):
-    if cam_id in cameras:
-        stop_flags[cam_id].set()
-        camera_threads[cam_id].join(timeout=1)
-        cameras[cam_id].release()
-        del cameras[cam_id]
-        del camera_threads[cam_id]
-        del stop_flags[cam_id]
-        if cam_id in latest_frame:
-            del latest_frame[cam_id]
-    return {"status": "stopped", "camera": cam_id}
-
-
-# -------- MJPEG stream --------
 @router.get("/{cam_id}/stream")
 def stream_camera(cam_id: str):
-    get_camera(cam_id)
+    # This supports multiple tabs; each call starts a generator
     return StreamingResponse(
         mjpeg_generator(cam_id),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
-
-# -------- Snapshot --------
 @router.get("/{cam_id}/snapshot")
 def snapshot(cam_id: str):
-    get_camera(cam_id)
-    frame = latest_frame.get(cam_id)
+    manager = get_or_create_manager(cam_id)
+    # Ensure camera is running to take a snapshot
+    if not manager.thread:
+        manager.start()
+        time.sleep(0.5) # Give it a moment to warm up
+    
+    frame = manager.latest_frame
     if not frame:
-        raise HTTPException(500, "No frame available yet")
+        raise HTTPException(status_code=500, detail="Camera frame not ready")
     return StreamingResponse(iter([frame]), media_type="image/jpeg")
