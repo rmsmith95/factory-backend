@@ -31,31 +31,36 @@ class Gantry:
                 logging.error(f"G-code failed: {cmd} | Error: {e}")
                 return None
 
-    def get_pose(self):
-        """Fetches current position using M114 (Standard Klipper G-code)."""
-        # M114 is the standard Klipper command for G-code position
-        res = self.send("M114")
-        logging.info(f'M114 result: {res}')
-        if not res: 
-            return False
-        
-        # Klipper M114 typically returns: "X:0.00 Y:0.00 Z:0.00 E:0.00 Count X:0 Y:0 Z:0"
-        # This regex captures the axis letter and its float value, ignoring "Count"
-        try:
-            matches = re.findall(r"([XYZE]):\s*([-?\d.]+)", res)
-            coords = {k.lower(): float(v) for k, v in matches}
-            
-            if coords:
-                # Update the internal state and return the new pose
-                if 'position' not in self.toolend:
-                    self.toolend['position'] = {}
-                self.toolend['position'].update(coords)
-                return coords
-                
-        except Exception as e:
-            logging.error(f"Failed to parse M114 response '{res}': {e}")
-            
+def get_pose(self):
+    res = self.send("M114")
+    # CRITICAL: See exactly what the board is sending back
+    logging.info(f"Raw M114 response: '{res}'")
+    
+    if not res or not isinstance(res, str): 
         return False
+    
+    try:
+        # Improved regex to handle various spacing and potential 'ok' prefix
+        # This looks for Axis:Value patterns specifically
+        matches = re.findall(r"([XYZE]):\s*(-?[\d.]+)", res, re.IGNORECASE)
+        
+        if not matches:
+            logging.warning(f"No coordinates found in: {res}")
+            return False
+
+        coords = {k.lower(): float(v) for k, v in matches}
+        
+        # Ensure we at least got X, Y, and Z
+        if all(k in coords for k in ['x', 'y', 'z']):
+            if 'position' not in self.toolend:
+                self.toolend['position'] = {}
+            self.toolend['position'].update(coords)
+            return coords
+                
+    except Exception as e:
+        logging.error(f"Failed to parse M114: {e}")
+            
+    return res
     
     def home(self):
         """Sets internal coordinate system origin (G92)."""
