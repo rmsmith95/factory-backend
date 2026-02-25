@@ -37,7 +37,7 @@ class Gantry:
     def get_pose(self):
         """Fetches X, Y, Z from gcode_move and A from the custom stepper object."""
         # Query both gcode_move and your specific 'a' stepper
-        query_url = f"http://{self.host}/printer/objects/query?gcode_move&manual_stepper%20a"
+        query_url = f"http://{self.connection.ip}/printer/objects/query?gcode_move&manual_stepper%20a"
         
         try:
             response = requests.get(query_url, timeout=5)
