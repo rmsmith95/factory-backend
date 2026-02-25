@@ -3,6 +3,7 @@ import logging
 import time
 import logging
 import os
+from sections.utils import Connection
 
 # Check if we are running on a Raspberry Pi (Linux)
 try:
@@ -47,6 +48,7 @@ class RaspberryPi:
 
 
     def connect(self, method, ip, port, com, baud, timeout=10):
+        self.connection = Connection(method, ip, port, com, baud, timeout)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup([self.in1, self.in2, self.lock_pin, self.ena_pin], GPIO.OUT)
         

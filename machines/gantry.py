@@ -3,17 +3,20 @@ import threading
 import requests
 import time
 import re
+from sections.utils import Connection
+
 
 class Gantry:
-    def __init__(self, host="192.168.1.60"):
-        self.host = host
-        self.base_url = f"http://{self.host}/printer/gcode/script"
+    def __init__(self):
+        self.connection = None
+        self.base_url = ""
         self.toolend = {'position': {'x': 0, 'y': 0, 'z': 0, 'a': 0}}
         self._io_lock = threading.Lock()
         self.in_motion = False
     
     def connect(self, method, ip, port, com, baud):
-        pass
+        self.connection = Connection(method, ip, port, com, baud, timeout=5)
+        self.base_url = f"http://{ip}/printer/gcode/script"
     
     def is_connected(self):
         return True
@@ -32,23 +35,27 @@ class Gantry:
                 return None
 
     def get_pose(self):
-        """Fetches current position directly from Moonraker's object state."""
-        # Use the objects/query endpoint instead of gcode/script
-        query_url = f"http://{self.host}/printer/objects/query?gcode_move"
+        """Fetches X, Y, Z from gcode_move and A from the custom stepper object."""
+        # Query both gcode_move and your specific 'a' stepper
+        query_url = f"http://{self.host}/printer/objects/query?gcode_move&manual_stepper%20a"
         
         try:
             response = requests.get(query_url, timeout=5)
             response.raise_for_status()
-            data = response.json()
+            status = response.json()['result']['status']
             
-            # Moonraker returns coordinates in the 'gcode_position' array: [x, y, z, e]
-            pos_array = data['result']['status']['gcode_move']['gcode_position']
+            # 1. Get X, Y, Z from the standard gcode_position array [x, y, z, e]
+            gcode_pos = status['gcode_move']['gcode_position']
+            
+            # 2. Get A from your custom manual_stepper object
+            # Note: In Moonraker, manual steppers are usually under 'manual_stepper <name>'
+            # a_pos = status.get('manual_stepper a', {}).get('position', 0.0)
             
             coords = {
-                'x': float(pos_array[0]),
-                'y': float(pos_array[1]),
-                'z': float(pos_array[2]),
-                'e': float(pos_array[3])
+                'x': float(gcode_pos[0]),
+                'y': float(gcode_pos[1]),
+                'z': float(gcode_pos[2]),
+                'a': float(0)
             }
             
             # Update internal state
@@ -59,9 +66,8 @@ class Gantry:
             return coords
 
         except Exception as e:
-            logging.error(f"Failed to fetch position from Moonraker: {e}")
+            logging.error(f"Failed to fetch XYZA position: {e}")
             return False
-
         
     def home(self):
         """Sets internal coordinate system origin (G92)."""
