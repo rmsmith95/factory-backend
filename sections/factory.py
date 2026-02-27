@@ -52,16 +52,17 @@ class Factory:
         gantry = machines.get("gantry", {})
         self.tools = data.get("tools", {})
         self.machines = {'gantry': Gantry(), 'cobot280': Cobot280(), 'gripper': ST3020Gripper(), 'rpi': RaspberryPi()}
-
-        self.machines['gantry'].holders = []
-        self.machines['gantry'].locations = gantry['locations'] = []
-        self.machines['gantry'].toolend = gantry['toolend'] = {'position': {'x': 0, 'y': 0, 'z': 0, 'a': 0}}
+        g = self.machines['gantry']
 
         if gantry:
-            self.machines['gantry'].holders = gantry['holders']
-            self.machines['gantry'].locations = gantry['locations']
-            self.machines['gantry'].toolend = gantry['toolend']
-            self.machines['gantry'].set_position(**self.machines['gantry'].toolend['position'])
+            g.holders = gantry.get('holders', [])
+            g.locations = gantry.get('locations', [])
+            g.toolend = gantry.get('toolend', {'position': {'x': 0, 'y': 0, 'z': 0, 'a': 0}})
+        else:
+            logging.warning("No gantry config found. Using defaults")
+            g.holders = []
+            g.locations = []
+            g.toolend = {'position': {'x': 0, 'y': 0, 'z': 0, 'a': 0}}
 
         # Load jobs
         jobs_file = data.get("jobs")
