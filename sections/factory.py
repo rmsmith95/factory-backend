@@ -35,7 +35,7 @@ class Factory:
 
     def load_factory(self, file):
         self.save_file = file
-
+        data = {}
         if not os.path.exists(file):
             logging.warning(f"Factory file not found at {file}. Using defaults")
         else:
