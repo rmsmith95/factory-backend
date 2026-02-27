@@ -2,6 +2,7 @@ from typing import List, Dict
 from aabb import AABB, plan_path
 import logging
 import json
+from json import JSONDecodeError
 from machines.gantry import Gantry
 from machines.cobot280 import Cobot280
 from machines.gripper import ST3020Gripper
@@ -34,17 +35,28 @@ class Factory:
 
     def load_factory(self, file):
         self.save_file = file
-        with open(file, "r") as f:
-            data = json.load(f)
+
+        if not os.path.exists(file):
+            logging.warning(f"Factory file not found at {file}. Using defaults")
+        else:
+            try:
+                if os.path.getsize(file) == 0:
+                    logging.warning(f"Factory file is empty at {file}. Using defaults")
+                else:
+                    with open(file, "r") as f:
+                        data = json.load(f)
+            except JSONDecodeError as e:
+                logging.warning(f"Invalid JSON in {file}: {e}. Using defaults")
         
         machines = data.get("machines", {})
-        gantry = machines['gantry']
-        self.machines = {'gantry': Gantry(), 'cobot280': Cobot280(), 'gripper': ST3020Gripper(), 'rpi': RaspberryPi()}
-        self.machines['gantry'].holders = gantry['holders']
-        self.machines['gantry'].locations = gantry['locations']
-        self.machines['gantry'].toolend = gantry['toolend']
-        self.machines['gantry'].set_position(**self.machines['gantry'].toolend['position'])
+        gantry = machines.get("gantry", {})
         self.tools = data.get("tools", {})
+        self.machines = {'gantry': Gantry(), 'cobot280': Cobot280(), 'gripper': ST3020Gripper(), 'rpi': RaspberryPi()}
+        if gantry:
+            self.machines['gantry'].holders = gantry['holders']
+            self.machines['gantry'].locations = gantry['locations']
+            self.machines['gantry'].toolend = gantry['toolend']
+            self.machines['gantry'].set_position(**self.machines['gantry'].toolend['position'])
 
         # Load jobs
         jobs_file = data.get("jobs")
