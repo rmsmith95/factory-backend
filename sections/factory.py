@@ -52,6 +52,11 @@ class Factory:
         gantry = machines.get("gantry", {})
         self.tools = data.get("tools", {})
         self.machines = {'gantry': Gantry(), 'cobot280': Cobot280(), 'gripper': ST3020Gripper(), 'rpi': RaspberryPi()}
+
+        self.machines['gantry'].holders = []
+        self.machines['gantry'].locations = gantry['locations'] = []
+        self.machines['gantry'].toolend = gantry['toolend'] = {'position': {'x': 0, 'y': 0, 'z': 0, 'a': 0}}
+
         if gantry:
             self.machines['gantry'].holders = gantry['holders']
             self.machines['gantry'].locations = gantry['locations']
